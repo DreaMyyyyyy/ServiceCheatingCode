@@ -7,3 +7,4 @@ class Config:
     MINIO_ACCESS_KEY = os.getenv('MINIO_ACCESS_KEY', 'minio')
     MINIO_SECRET_KEY = os.getenv('MINIO_SECRET_KEY', 'minio123')
 
+

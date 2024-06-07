@@ -2,7 +2,7 @@ from minio import Minio
 from minio.error import S3Error
 import os
 
-# Настройки MinIO
+# Настройки Minio
 MINIO_CLIENT = Minio(
     os.getenv('MINIO_URL', 'localhost:9000'),
     access_key=os.getenv('MINIO_ACCESS_KEY', 'minio'),
@@ -22,3 +22,4 @@ def get_file_from_minio(doc_version_id):
     except S3Error as exc:
         print(f"Error occurred: {exc}")
         return None
+

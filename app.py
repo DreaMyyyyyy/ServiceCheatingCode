@@ -1,28 +1,32 @@
-from flask import Flask, request, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
+from fastapi_sqlalchemy import DBSessionMiddleware, db
 from plagiarism_detection import compare_code_fragments, extract_code_from_notebook_content
 from minio_client import get_file_from_minio
 from models import SQLDocumentVersion, SQLCodeFragment, SQLReport
 import uuid
 import logging
+import os
 
-app = Flask(__name__)
-app.config.from_object('config.Config')
-db = SQLAlchemy(app)
+app = FastAPI()
+
 # Настройка логгера
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@app.route('/sit-service-cheating-code', methods=['POST'])
-def check_plagiarism():
+# Настройка подключения к БД и Minio
+app.add_middleware(DBSessionMiddleware, db_url=os.getenv('DATABASE_URL'))
+
+@app.post('/sit-service-cheating-code')
+async def check_plagiarism(request: Request):
     try:
-        data = request.json
+        data = await request.json()
         doc_version_id = data['doc_version_id']
         
-        # Получить файл из MinIO
+        # Получить файл из Minio
         file_content = get_file_from_minio(doc_version_id)
         if not file_content:
-            return jsonify({'error': 'File not found'}), 404
+            raise HTTPException(status_code=404, detail="File not found")
 
         # Извлечь фрагменты кода
         code_fragments = extract_code_from_notebook_content(file_content)
@@ -41,11 +45,11 @@ def check_plagiarism():
         db.session.commit()
 
         # Найти контрольную точку текущего документа
-        doc_version = SQLDocumentVersion.query.get(doc_version_id)
+        doc_version = db.session.query(SQLDocumentVersion).get(doc_version_id)
         checkpoint_id = doc_version.document.report.checkpoint_id
 
         # Найти все другие версии документов для той же контрольной точки
-        related_doc_versions = SQLDocumentVersion.query.join(SQLDocumentVersion.document) \
+        related_doc_versions = db.session.query(SQLDocumentVersion).join(SQLDocumentVersion.document) \
                                                        .join(SQLReport) \
                                                        .filter(SQLReport.checkpoint_id == checkpoint_id,
                                                                SQLDocumentVersion.id != doc_version_id).all()
@@ -54,14 +58,14 @@ def check_plagiarism():
         results = []
         for related_version in related_doc_versions:
             # Проверяем наличие фрагментов кода у текущей версии документа
-            related_fragments = SQLCodeFragment.query.filter_by(document_version_id=related_version.id).all()
+            related_fragments = db.session.query(SQLCodeFragment).filter_by(document_version_id=related_version.id).all()
             
             # Если фрагментов кода нет, создаем их и сохраняем в БД
             if not related_fragments:
-                # Получить файл из MinIO для текущей версии
+                # Получить файл из Minio для текущей версии
                 related_file_content = get_file_from_minio(related_version.id)
                 if not related_file_content:
-                    return jsonify({'error': 'File not found'}), 404
+                    raise HTTPException(status_code=404, detail="File not found")
                 
                 # Извлечь фрагменты кода из файла
                 related_code_fragments = extract_code_from_notebook_content(related_file_content)
@@ -78,12 +82,12 @@ def check_plagiarism():
                 db.session.commit()
 
                 # Обновляем список фрагментов кода для текущей версии документа
-                related_fragments = SQLCodeFragment.query.filter_by(document_version_id=related_version.id).all()
+                related_fragments = db.session.query(SQLCodeFragment).filter_by(document_version_id=related_version.id).all()
 
             # Сравниваем фрагменты кода текущей версии с фрагментами кода текущего документа
             for fragment1 in fragments_db:
                 for fragment2 in related_fragments:
-                    similarity = compare_code_fragments(fragment1.fragment, fragment2.fragment)
+                    similarity = compare_code_fragments(fragment1.fragment, fragment2.fragment, data.get('language', 'python'))
                     if similarity > data.get('threshold', 0.5):
                         result = {
                             'cell_number': fragment1.cell_number,
@@ -92,12 +96,13 @@ def check_plagiarism():
                         }
                         results.append(result)
 
-        return jsonify(results), 200
+        return JSONResponse(content=results)
 
     except Exception as e:
         # Логирование ошибки
         logger.exception("An error occurred: %s", str(e))
-        return jsonify({'error': 'An error occurred'}), 500
+        raise HTTPException(status_code=500, detail="An error occurred")
+
 
 
 

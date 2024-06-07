@@ -5,7 +5,7 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Копируем файл requirements.txt в контейнер
-COPY requirements.txt requirements.txt
+COPY requirements.txt .
 
 # Устанавливаем необходимые Python пакеты
 RUN pip install --no-cache-dir -r requirements.txt
@@ -13,11 +13,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем остальной код приложения в контейнер
 COPY . .
 
-# Устанавливаем переменные окружения
-ENV FLASK_APP=app.py
-
 # Открываем порт, на котором работает приложение
-EXPOSE 5000
+EXPOSE 8000
 
-# Запускаем приложение с использованием gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Запускаем приложение с использованием uvicorn
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+
