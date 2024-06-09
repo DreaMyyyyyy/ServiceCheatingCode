@@ -1,14 +1,14 @@
 from difflib import SequenceMatcher
 from pygments.lexers import get_lexer_by_name
 from pygments.token import Token
-from zss import Node
+from zss import Node, simple_distance
 import nbformat
 
 def tokenize_code(code, language):
     lexer = get_lexer_by_name(language)
     tokens = lexer.get_tokens(code)
-    # Удаляем префиксные пробелы из токенов
-    tokens = [token[1].lstrip() for token in tokens if token[0] != Token.Comment]
+    # Удаляем комментарии и пустые строки
+    tokens = [token[1].strip() for token in tokens if token[0] not in {Token.Comment.Single, Token.Comment.Multiline, Token.Text.Whitespace} and token[1].strip()]
     return tokens
 
 def extract_code_from_notebook_content(notebook_content):
@@ -19,7 +19,7 @@ def extract_code_from_notebook_content(notebook_content):
             if cell.cell_type == 'code':
                 code_fragments.append(cell.source)
     except nbformat.reader.NotJSONError:
-        # В случае неверного формата блокнота
+        print("Error: Not a valid JSON format for the notebook content.")
         pass
     return code_fragments
 
@@ -48,7 +48,15 @@ def damerau_levenshtein_similarity(seq1, seq2):
     max_len = max(len(seq1), len(seq2))
     return 1 - distance / max_len
 
+def zhang_shasha_distance(tokens1, tokens2):
+    tree1 = convert_to_zss(tokens1)
+    tree2 = convert_to_zss(tokens2)
+    return simple_distance(tree1, tree2)
+
 def convert_to_zss(tokens):
+    if not tokens:
+        return Node("empty")
+
     root = Node("root")
     stack = [root]
 
@@ -58,74 +66,31 @@ def convert_to_zss(tokens):
         if token == '(':
             stack.append(node)
         elif token == ')':
-            stack.pop()
+            if len(stack) > 1:
+                stack.pop()
 
     return root
-
-def count_nodes(tree):
-    if tree is None:
-        return 0
-    count = 1
-    for child in tree.children:
-        count += count_nodes(child)
-    return count
-
-def count_matching_nodes(tree1, tree2):
-    if tree1 is None or tree2 is None:
-        return 0
-    matching_count = 0
-    if tree1.label == tree2.label:
-        matching_count += 1
-    for child1, child2 in zip(tree1.children, tree2.children):
-        matching_count += count_matching_nodes(child1, child2)
-    return matching_count
-
-def zhang_shasha_distance(tokens1, tokens2):
-    tree1 = convert_to_zss(tokens1)
-    tree2 = convert_to_zss(tokens2)
-
-    print("Tree1:")
-    print_tree(tree1)
-    print("\nTree2:")
-    print_tree(tree2)
-
-    nodes1_count = count_nodes(tree1)
-    nodes2_count = count_nodes(tree2)
-
-    matching_nodes_count = count_matching_nodes(tree1, tree2)
-
-    total_nodes = nodes1_count + nodes2_count - matching_nodes_count
-
-    if total_nodes == 0:
-        return 1.0
-    else:
-        similarity = matching_nodes_count / total_nodes
-
-    return similarity
-
-def print_tree(node, level=0):
-    print("  " * level + str(node.label))
-    for child in node.children:
-        print_tree(child, level + 1)
 
 def compare_code_fragments(code1, code2, language):
     tokens1 = tokenize_code(code1, language)
     tokens2 = tokenize_code(code2, language)
 
-    print(f"Tokens1 ({language}):", tokens1)
-    print(f"Tokens2 ({language}):", tokens2)
-
     damerau_levenshtein_sim = damerau_levenshtein_similarity(tokens1, tokens2)
     seq_matcher = SequenceMatcher(None, tokens1, tokens2)
     lcs_sim = seq_matcher.ratio()
 
-    zss_similarity = zhang_shasha_distance(tokens1, tokens2)
+    zss_distance = zhang_shasha_distance(tokens1, tokens2)
+    max_len = max(len(tokens1), len(tokens2))
+    zss_similarity = 1 - zss_distance / max_len
 
-    print("AST Similarity:", zss_similarity)
-    print("damerau_levenshtein_sim:", damerau_levenshtein_sim)
-    print("lcs_sim:", lcs_sim)
-
-    return (damerau_levenshtein_sim + lcs_sim) / 2
+    print(lcs_sim)
+    print('\n')
+    print(damerau_levenshtein_sim)
+    print('\n')
+    print(zss_similarity)
+    print('\n')
+    
+    return (damerau_levenshtein_sim + lcs_sim + zss_similarity) / 3
 
 
 
