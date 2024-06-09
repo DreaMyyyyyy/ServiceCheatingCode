@@ -3,12 +3,27 @@ from pygments.lexers import get_lexer_by_name
 from pygments.token import Token
 from zss import Node, simple_distance
 import nbformat
+import re
 
 def tokenize_code(code, language):
     lexer = get_lexer_by_name(language)
     tokens = lexer.get_tokens(code)
-    # Удаляем комментарии и пустые строки
-    tokens = [token[1].strip() for token in tokens if token[0] not in {Token.Comment.Single, Token.Comment.Multiline, Token.Text.Whitespace} and token[1].strip()]
+    
+    # Удаляем комментарии и пробелы
+    tokens = [
+        token[1].strip()
+        for token in tokens
+        if token[0] not in {Token.Comment.Single, Token.Comment.Multiline, Token.Text.Whitespace} and token[1].strip()
+    ]
+    
+    # Убираем любые строковые литералы и числовые значения, заменяя их на специальные токены
+    tokens = [
+        re.sub(r'".*?"', 'STRING_LITERAL', token) for token in tokens
+    ]
+    tokens = [
+        re.sub(r'\d+', 'NUMBER_LITERAL', token) for token in tokens
+    ]
+    
     return tokens
 
 def extract_code_from_notebook_content(notebook_content):
@@ -20,7 +35,6 @@ def extract_code_from_notebook_content(notebook_content):
                 code_fragments.append(cell.source)
     except nbformat.reader.NotJSONError:
         print("Error: Not a valid JSON format for the notebook content.")
-        pass
     return code_fragments
 
 def damerau_levenshtein_distance(seq1, seq2):
@@ -62,12 +76,14 @@ def convert_to_zss(tokens):
 
     for token in tokens:
         node = Node(token)
-        stack[-1].addkid(node)
         if token == '(':
+            stack[-1].addkid(node)
             stack.append(node)
         elif token == ')':
             if len(stack) > 1:
                 stack.pop()
+        else:
+            stack[-1].addkid(node)
 
     return root
 
@@ -83,14 +99,12 @@ def compare_code_fragments(code1, code2, language):
     max_len = max(len(tokens1), len(tokens2))
     zss_similarity = 1 - zss_distance / max_len
 
-    print(lcs_sim)
-    print('\n')
-    print(damerau_levenshtein_sim)
-    print('\n')
-    print(zss_similarity)
-    print('\n')
-    
+    print(f"LCS Similarity: {lcs_sim}")
+    print(f"Damerau-Levenshtein Similarity: {damerau_levenshtein_sim}")
+    print(f"ZSS Similarity: {zss_similarity}")
+
     return (damerau_levenshtein_sim + lcs_sim + zss_similarity) / 3
+
 
 
 
