@@ -1,4 +1,4 @@
-from plagiarism_detection import compare_code_fragments
+from src.services.service_plagiarism import compare_code_fragments
 
 def test_code_comparison():
     # Java код с дополнительными методами и комментариями

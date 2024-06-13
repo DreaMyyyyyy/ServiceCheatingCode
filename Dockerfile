@@ -1,21 +1,20 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
-WORKDIR /app
+WORKDIR /code
 
-COPY requirements.txt .
+COPY ./requirements.txt /code/requirements.txt
 
 RUN apt-get update && apt-get install -y \
     libpq-dev \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
-COPY . .
+COPY ./src /code/src
 
-# Установите переменную окружения для URL базы данных
-ENV DATABASE_URL="sqlite:///./test.db"
+CMD ["fastapi", "run", "src/main.py", "--port", "80"]
 
-CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+EXPOSE 80/tcp
 
 

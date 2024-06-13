@@ -3,14 +3,17 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship, DeclarativeBase
 import uuid
 
+
 # Базовый класс для всех моделей
 class Base(DeclarativeBase):
     pass
-    
+
+
 # Модель пользователя
 class SQLUser(Base):
     __tablename__ = 'users'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
 
 # Модель студента, который также является пользователем
 class SQLStudent(Base):
@@ -20,11 +23,13 @@ class SQLStudent(Base):
     group = Column(String)
     user = relationship("SQLUser", back_populates="student")
 
+
 # Модель предмета
 class SQLSubject(Base):
     __tablename__ = 'subjects'
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(Text, nullable=False)
+
 
 # Модель контрольной точки
 class SQLCheckpoint(Base):
@@ -34,6 +39,7 @@ class SQLCheckpoint(Base):
     subject_id = Column(UUID(as_uuid=True), ForeignKey('subjects.id'))
     subject = relationship("SQLSubject")
     reports = relationship("SQLReport", back_populates="checkpoint")
+
 
 # Модель отчета
 class SQLReport(Base):
@@ -45,6 +51,7 @@ class SQLReport(Base):
     checkpoint = relationship("SQLCheckpoint", back_populates="reports")
     documents = relationship("SQLDocument", back_populates="report")
 
+
 # Модель документа
 class SQLDocument(Base):
     __tablename__ = 'documents'
@@ -53,6 +60,7 @@ class SQLDocument(Base):
     report_id = Column(UUID(as_uuid=True), ForeignKey('reports.id'))
     report = relationship("SQLReport", back_populates="documents")
     versions = relationship("SQLDocumentVersion", back_populates="document")
+
 
 # Модель версии документа
 class SQLDocumentVersion(Base):
@@ -64,6 +72,7 @@ class SQLDocumentVersion(Base):
     document = relationship("SQLDocument", back_populates="versions")
     code_fragments = relationship("SQLCodeFragment", back_populates="document_version")
 
+
 # Модель фрагмента кода
 class SQLCodeFragment(Base):
     __tablename__ = 'code_fragments'
@@ -72,6 +81,7 @@ class SQLCodeFragment(Base):
     fragment = Column(Text, nullable=False)
     cell_number = Column(Integer, nullable=False)
     document_version = relationship("SQLDocumentVersion", back_populates="code_fragments")
+
 
 # Связь User с Teacher и Student
 SQLUser.student = relationship("SQLStudent", uselist=False, back_populates="user")
@@ -90,4 +100,3 @@ SQLDocument.versions = relationship("SQLDocumentVersion", back_populates="docume
 
 # Связь DocumentVersion с CodeFragment
 SQLDocumentVersion.code_fragments = relationship("SQLCodeFragment", back_populates="document_version")
-
